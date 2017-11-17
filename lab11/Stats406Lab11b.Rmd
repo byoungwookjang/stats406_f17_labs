@@ -1,0 +1,144 @@
+---
+title: "Lab 11 (b)" 
+author: 'GAO Zheng' 
+date: "November 30, 2016" 
+output:
+    html_notebook: default 
+    html_document: default 
+    pdf_document: default 
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook.
+
+## Bootstrap
+
+Suppose we want to estimate a parameter $\theta$ of the population distribution $\mathcal{F}$. We propose an estimator $\hat\theta$ based on a collected samples $\mathcal{X} = {X_1 , ... , X_n}$.
+
+We want know how good $\hat\theta$ is by evaluating $\mathrm{MSE}(\hat\theta)$.
+
+If we know $\mathcal{F}$, then in principle we can calculate $\mathrm{MSE}(\hat\theta)$. But unless the distribution
+is easy to handle (e.g. normal), analytical formulation is intractable. Besides, we do not know $\mathcal{F}$ in practice.
+
+Suppose we can sample from F, how to compute $\mathrm{MSE}(\hat\theta)$?
+
+1. Draw samples $\mathcal{X}_1 , ... , \mathcal{X}_K$, each of size $n$, from $\mathcal{F}_\theta$.
+2. Compute sample statistic $\hat\theta_k$ for each sample $\mathcal{X}_k$.
+3. Approximate MSE of $\theta$ by $\sum_{k=1}^K (\hat\theta_k - \theta)^2/n$ .
+
+Bootstrap: Now we don’t know F, and have only one sample $\mathcal{X}$, we can mimic the above procedure
+
+1. Draw bootstrap samples $\mathcal{X}_1^* , ... , \mathcal{X}_K^*$, each of size $n$, from the original sample $\mathcal{X}$.
+2. Compute sample statistic $\hat\theta_k^*$ for each sample $\mathcal{X}_k^*$.
+3. Aprroximate MSE of $\theta$ by $\sum_{k=1}^K (\hat\theta_k^* - \hat\theta)^2/n$, where $\hat\theta$ is the estimate from original sample $\mathcal{X}$.
+
+## Example 1: Parametric bootstrap
+
+Consider the following model. Given the data tuples $(y_i , x_i), i = 1, 2, ... , n$, we model the distribution of $Y_i$'s given $x_i$'s as as exponential distribution with parameter $\lambda x_i$.
+$$
+Y_i | x_i , \lambda \sim \mathrm{Exponential}(\lambda x_i)
+$$
+
+Notice that we treat $x_i$'s as fixed input data values (as one does for linear regressions in usual case which is called "fixed design"") without modeling them as realizations of a random variables.
+
+Given the maximum likelihood estimator
+$$
+\hat\lambda = \frac{n}{\sum_{i=1}^n x_i y_i}
+$$
+
+We are interested in the bias, variance and MSE of the maximum likelihood estimator $\hat\lambda$.
+
+Now please download [lab11b.Rdata]() and `r load("lab11b.Rdata")`. The name of the dataframe is `sampledata`.
+
+We first perform prametric bootstrap. Every simulation of $\hat\lambda_k^*$ simulate $y$'s on all the deisgn location $x$'s.
+
+```{r}
+x = sampledata[,1]
+y = sampledata[,2]
+n = length(x)
+
+## calculate lambda-hat
+lambda.hat = n / sum( x * y )
+
+## specify bootstrap sample size
+B = 10000
+
+# storage for bootstrapped lambda.hat
+lambda.hat.p.boot = c() 
+
+## use parametric bootstrap for y
+for (i in 1:B){
+	y.sample = sapply(lambda.hat*x, FUN = function(x) rexp(1,x))
+	lambda.hat.p.boot[i] = n / sum( x * y.sample )
+}
+# bias
+mean(lambda.hat.p.boot)-lambda.hat
+# variance
+var(lambda.hat.p.boot)
+# MSE
+mean((lambda.hat.p.boot - lambda.hat)^2)
+
+hist(lambda.hat.p.boot, breaks = 10, xlim = c(1, 4), main = "Parametric Boostrap estimtes")
+abline(v = lambda.hat, lwd = 2, col = 2)
+legend("topright", legend = "lambda.hat", col = 2, lwd = 2, border = F)
+```
+
+Bias is no cause for worry; variance is large at this sample size.
+
+## Example 2: Non-parametric bootstrap
+
+We now perform the non-parametric version of bootsreap. No new data points are simulated in this case.
+
+```{r}
+lambda.hat.np.boot = c() 
+for (i in 1:B){
+	sample.id = sample(n,size=n, replace=TRUE)
+	lambda.hat.np.boot[i] = n/sum(x[sample.id]*y[sample.id])
+}
+# bias
+mean(lambda.hat.np.boot)-lambda.hat
+# variance
+var(lambda.hat.np.boot)
+# MSE
+mean((lambda.hat.np.boot - lambda.hat)^2)
+
+hist(lambda.hat.np.boot, breaks = 10, xlim = c(1, 4), main = "Non-parametric Boostrap estimtes")
+abline(v = lambda.hat, lwd = 2, col = 2)
+legend("topright", legend = "lambda.hat", col = 2, lwd = 2, border = F)
+```
+
+## Example 3 (optional): Treating design as random 
+
+If we treat x input as realizations of random variable - i.e., random design, we *do* model x. To perform *parametric* bootstrap of $\hat\lambda$ using $y_i$ condition on $x_i$, i = 1, ..., n, we have to use nonparametric bootstrap to sample for $x$'s (there's no way to perform parametric bootstrap to sample x since the distribution of x is completely unspecified).
+
+```{r}
+lambda.hat.p.np.boot = c()
+for (i in 1:B){
+	y.sample = c()
+	x.sample = sample(x, size=n, replace=TRUE)
+	y.sample = sapply(lambda.hat*x.sample, FUN = function(x) rexp(1,x))
+	lambda.hat.p.np.boot[i] = n/sum(x.sample*y.sample)
+}
+# bias
+mean(lambda.hat.p.np.boot)-lambda.hat
+# variance
+var(lambda.hat.p.np.boot)
+# MSE
+mean((lambda.hat.p.np.boot - lambda.hat)^2)
+
+hist(lambda.hat.p.np.boot, breaks = 10, xlim = c(1, 4), main = "Boostrap estimtes under random design")
+abline(v = lambda.hat, lwd = 2, col = 2)
+legend("topright", legend = "lambda.hat", col = 2, lwd = 2, border = F)
+```
+
+All three bootstrap estimates are pretty similar in this example.
+
+
+## Extras
+
+When does bootstrap work? Bootstrap works in most applications and perhaps all examples you will see in this course.
+The sufficient and necesary condition for bootstrap consistency is that a central limit property holds for $\hat\theta$ (Mamman, 1992).
+
+See more comprehensive treatment here [http://www.unc.edu/~saraswat/teaching/econ870/fall11/JH_01.pdf](http://www.unc.edu/~saraswat/teaching/econ870/fall11/JH_01.pdf).
+
+
+
