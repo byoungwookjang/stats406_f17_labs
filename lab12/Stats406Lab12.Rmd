@@ -1,0 +1,268 @@
+---
+title: "Lab 12"
+author: "Byoungwook Jang"
+date: "December 1st, 2017"
+output:
+  html_document: default
+  html_notebook: default
+---
+s
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Now you can download the RMarkdown file by clicking the button in the rupper right corner of this html page.
+
+## Optimization?
+As we have done with the rejection method, when you are trying to derive the *BEST* algorithm or parameters, you need to solve a proposed optimization problem. What is an optimization problem then? It looks something like
+
+$$ x^* = argmax_{x\in X} f(x)$$
+where we call $f$ is the objective function, and $x^*$ is our solution. 
+
+### Example from class
+Let's stick with the example from the class. We have that 
+$$ f(x,y) = \exp \left[ -\frac{1}{2} (x^2y^2 + x^2 + y^2 - 8x - 8y)\right]$$
+We can look at the contours of the function as following
+```{r}
+f_fun=function(x,y){
+  z=exp(-0.5*(x^2*y^2+x^2+y^2-8*x-8*y))
+  return(z)
+}
+x=seq(from=-1,to=10,by=0.1)
+y=x
+z=outer(x,y,f_fun) # create matrix of values of $f$ on grid.
+library('lattice')
+#3-d plotting
+persp(x,y,z,theta=-30,phi=30,col='lightblue', ticktype='detailed',shade=0.4)
+```
+
+
+If we want to see this 3-D plot in a more informative way, we can look at
+```{r}
+contour(x,y,z, nlevels=5, xlim=c(-1, 6), ylim=c(-1,6))
+```
+
+Then, what's the gradient $\nabla f(x,y)$? Here, the gradient is defined as
+$$ \nabla f(x,y) = 
+  \begin{bmatrix} \frac{\partial f}{\partial x} \\ \frac{\partial f}{\partial y}
+  \end{bmatrix}$$
+Just think of this vector as a multivariate version of the first derivative. If we actually derive this in terms with our example function $f$, we have that
+$$ \begin{align*}
+
+\nabla f(x,y) & = 
+  \begin{bmatrix} \frac{\partial f}{\partial x} \\ \frac{\partial f}{\partial y}
+  \end{bmatrix} \\
+  
+  & = \begin{bmatrix} 
+  \exp \left[ -\frac{1}{2} (x^2y^2 + x^2 + y^2 - 8x - 8y)\right] (xy^2 + x - 4) \; \; \\ 
+  \exp \left[ -\frac{1}{2} (x^2y^2 + x^2 + y^2 - 8x - 8y)\right] (x^2y + y - 4) \; \; 
+  \end{bmatrix}
+  
+\end{align*}$$
+Intuitively, we would try to solve $\nabla f(x,y) = 0$ to find the local maximizer $(x^*, y^*)$. However, it seems like our gradient $\nabla f(x,y)$ isn't looking good. What do we do??
+
+## Optimization Methods
+This is where the optimization methods come in. We will cover two methods, gradient descwent and newton-raphson. 
+
+### Gradient Descent
+The idea behind the gradient method is simple. We build a linear approximation at the current point, and move one step at a time. 
+
+
+Algorithm (Gradient Descent Method)
+*Input*: initial point $x_0$, stepsize $\lambda$
+
+1. Start with an initial point $x_0$
+
+While $condition < \epsilon$
+
+  2. *Update*: $x_{n+1} = x_n - \lambda f'(x_n)$
+  3. Current stop condition = $\frac{|x_{n+1} - x_n|}{|x_n| + \epsilon}$
+  
+
+Algorithm (Gradient Descent Method)
+*Input*: initial point $x_0$, stepsize $\lambda$
+
+1. Start with an initial point $x_0$
+
+While $condition < \epsilon$
+
+  2. *Update*: $x_{n+1} = x_n - \lambda \nabla f(x_n)$
+  3. Current stop condition = $\frac{||x_{n+1} - x_n||}{||x_n + \epsilon||}$
+
+Let's look at a very simple univariate case, $g(x) = x^2$. Then, the intuition is as follows
+
+```{r}
+gd_quad = function(step_size, init_point = 1, tol=1e-3, max_iter = 100){
+  iter_points = data.frame(x=rep(NA, max_iter), y=rep(NA, max_iter))
+  curr_diff = 1
+  t = 1
+  iter_points$x[1] = init_point
+  iter_points$y[1] = init_point^2
+  
+  while(curr_diff > tol && t < max_iter){
+    curr_grad = 2*iter_points$x[t]
+    iter_points$x[t+1] = iter_points$x[t] - step_size*curr_grad
+    iter_points$y[t+1] = (iter_points$x[t+1])^2
+    curr_diff = abs(iter_points$x[t+1] - iter_points$x[t])
+    t = t+1
+  }
+  return(iter_points)
+}
+
+quad_iterations = gd_quad(0.1, 1)
+plot(quad_iterations$x, quad_iterations$y, col='red', xlim=c(-1,1), xlab='x', ylab='y')
+lines(quad_iterations$x, quad_iterations$y, col='red')
+
+true_x = seq(-1, 1, length.out = 100)
+lines(true_x, true_x^2)
+
+```
+
+Note that we have a challenge on choosing the stepsize $\lambda$. Usually, we can use the backtracking method. 
+
+### Multivariate case example
+Let's continue to work with 
+
+$$ f(x,y) = x^2 + y^2$$
+
+$$ \begin{align*}
+
+\nabla f(x,y) & = 
+  \begin{bmatrix} \frac{\partial f}{\partial x} \\ \frac{\partial f}{\partial y}
+  \end{bmatrix} \\
+  
+  & = \begin{bmatrix} 
+  2x \\ 2y
+  \end{bmatrix}
+  
+\end{align*}$$
+
+```{r}
+f_fun=function(x,y){
+  z=x^2 + y^2
+  return(z)
+}
+
+grad_f = function(input){
+  x = input[1]
+  y = input[2]
+  d_x = 2*x
+  d_y = 2*y
+  return(c(d_x, d_y))
+}
+
+gd_quad = function(step_size, init_point = c(1,1), tol=1e-5, max_iter = 10000){
+  iter_points = list(x=matrix(NA, nrow = max_iter, ncol=2), iter_diff = rep(NA, max_iter))
+  curr_diff = 1
+  t = 1
+  iter_points$x[t,] = init_point
+  
+  while(curr_diff > tol && t < max_iter){
+    curr_grad = grad_f(iter_points$x[t,])
+    iter_points$x[t+1,] = iter_points$x[t, ] - step_size*curr_grad
+    v = f_fun(iter_points$x[t,1], iter_points$x[t,2])
+    
+    while (f_fun(iter_points$x[t+1,1], iter_points$x[t+1,2])>v){
+      step_size = step_size/2;
+      iter_points$x[t+1,] = iter_points$x[t, ] - step_size*curr_grad
+    }
+    
+    iter_points$x[t+1,] = iter_points$x[t, ] - step_size*curr_grad
+    curr_diff = sum(curr_grad^2)
+    iter_points$iter_diff[t] = curr_diff
+    t = t+1
+  }
+  return(iter_points)
+}
+
+init_point = c(-4, -5)
+quad_iterations = gd_quad(0.7, init_point)
+
+
+x=seq(from=-6,to=10,by=0.1)
+y=x
+z=outer(x,y,f_fun)
+
+contour(x,y,z,  nlevels = 15, xlim=c(-6, 6), ylim=c(-6,6))
+par(new=TRUE)
+points(quad_iterations$x[,1], quad_iterations$x[,2], col='red')
+
+plot(na.omit(quad_iterations$iter_diff))
+  
+```
+
+## Newton-Raphson Method
+Algorithm (Newton-Raphson Method)
+*Input*: initial point $x_0$, stepsize $\lambda$
+
+1. Start with an initial point $x_0$
+
+While $condition < \epsilon$
+
+  2. *Update*: $x_{n+1} = x_n - \frac{f'(x_n)}{f''(x_n)}$
+  3. Current stop condition = $\frac{|x_{n+1} - x_n|}{|x_n| + \epsilon}$
+  
+
+Algorithm (Newton-Raphson Method)
+*Input*: initial point $x_0$, stepsize $\lambda$
+
+1. Start with an initial point $x_0$
+
+While $condition < \epsilon$
+
+  2. *Update*: $x_{n+1} = x_n - (\nabla^2f(x_n))^{-1} \cdot \nabla f(x_n)$
+  3. Current stop condition = $\frac{||x_{n+1} - x_n||}{||x_n + \epsilon||}$
+
+```{r}
+grad_f = function(input){
+  x = input[1]
+  y = input[2]
+  d_x = 2*x
+  d_y = 2*y
+  return(c(d_x, d_y))
+}
+
+hessian_f = function(input){
+  return(2*diag(2))
+}
+
+nr_quad = function(init_point = c(1,1), tol=1e-5, max_iter = 10000){
+  iter_points = list(x=matrix(NA, nrow = max_iter, ncol=2), iter_diff = rep(NA, max_iter))
+  curr_diff = 1
+  t = 1
+  iter_points$x[t,] = init_point
+  
+  while(curr_diff > tol && t < max_iter){
+    curr_grad = grad_f(iter_points$x[t,])
+    curr_hess = hessian_f(iter_points$x[t,])
+    iter_points$x[t+1,] = iter_points$x[t, ] - solve(curr_hess, curr_grad)
+    curr_diff = sum(curr_grad^2)
+    iter_points$iter_diff[t] = curr_diff
+    t = t+1
+  }
+  return(iter_points)
+}
+
+init_point = c(-4, -5)
+quad_iterations = nr_quad(init_point)
+
+f_fun=function(x,y){
+  z=x^2 + y^2
+  return(z)
+}
+x=seq(from=-6,to=10,by=0.1)
+y=x
+z=outer(x,y,f_fun)
+
+contour(x,y,z,  nlevels = 15, xlim=c(-6, 6), ylim=c(-6,6))
+par(new=TRUE)
+points(quad_iterations$x[,1], quad_iterations$x[,2], col='red')
+
+plot(na.omit(quad_iterations$iter_diff))
+  
+```
+
+
+## E-M Algorithm
